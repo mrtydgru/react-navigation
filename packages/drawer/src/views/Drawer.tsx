@@ -96,6 +96,7 @@ type Props = {
   renderDrawerContent: Renderer;
   renderSceneContent: Renderer;
   gestureHandlerProps?: React.ComponentProps<typeof PanGestureHandler>;
+  dimensions: { width: number; height: number };
 };
 
 export default class DrawerView extends React.Component<Props> {
@@ -196,6 +197,22 @@ export default class DrawerView extends React.Component<Props> {
     }
   };
 
+  private getDrawerWidth = (): number => {
+    const { drawerStyle, dimensions } = this.props;
+    const { width } = StyleSheet.flatten(drawerStyle);
+
+    if (typeof width === 'string' && width.endsWith('%')) {
+      // Try to calculate width if a percentage is given
+      const percentage = Number(width.replace(/%$/, ''));
+
+      if (Number.isFinite(percentage)) {
+        return dimensions.width * (percentage / 100);
+      }
+    }
+
+    return typeof width === 'number' ? width : 0;
+  };
+
   private clock = new Clock();
   private interactionHandle: number | undefined;
 
@@ -207,16 +224,25 @@ export default class DrawerView extends React.Component<Props> {
   private nextIsOpen = new Value<Binary | -1>(UNSET);
   private isSwiping = new Value<Binary>(FALSE);
 
+  private initialDrawerWidth = this.getDrawerWidth();
+
   private gestureState = new Value<number>(GestureState.UNDETERMINED);
   private touchX = new Value<number>(0);
   private velocityX = new Value<number>(0);
   private gestureX = new Value<number>(0);
   private offsetX = new Value<number>(0);
-  private position = new Value<number>(0);
+  private position = new Value<number>(
+    this.props.open
+      ? this.initialDrawerWidth *
+        (this.props.drawerPosition === 'right'
+          ? DIRECTION_RIGHT
+          : DIRECTION_LEFT)
+      : 0
+  );
 
-  private containerWidth = new Value<number>(0);
-  private drawerWidth = new Value<number>(0);
-  private drawerOpacity = new Value<number>(0);
+  private containerWidth = new Value<number>(this.props.dimensions.width);
+  private drawerWidth = new Value<number>(this.initialDrawerWidth);
+  private drawerOpacity = new Value<number>(this.initialDrawerWidth ? 1 : 0);
   private drawerPosition = new Value<number>(
     this.props.drawerPosition === 'right' ? DIRECTION_RIGHT : DIRECTION_LEFT
   );
@@ -560,7 +586,10 @@ export default class DrawerView extends React.Component<Props> {
     const isOpen = drawerType === 'permanent' ? true : open;
     const isRight = drawerPosition === 'right';
 
-    const contentTranslateX = drawerType === 'front' ? 0 : this.translateX;
+    const contentTranslateX =
+      drawerType === 'front' || drawerType === 'permanent'
+        ? 0
+        : this.translateX;
     const drawerTranslateX =
       drawerType === 'back'
         ? I18nManager.isRTL
@@ -612,9 +641,7 @@ export default class DrawerView extends React.Component<Props> {
           <Animated.View
             style={[
               styles.content,
-              drawerType !== 'permanent' && {
-                transform: [{ translateX: contentTranslateX }],
-              },
+              { transform: [{ translateX: contentTranslateX }] },
               sceneContainerStyle as any,
             ]}
           >
